@@ -1,3 +1,2 @@
-sqlite3
-datetime
-logging
+# No additional packages needed for basic functionality
+# SQLite3 is included in Python standard library
