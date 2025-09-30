@@ -1,2 +1,13 @@
-# No additional packages needed for basic functionality
+# Runtime dependencies
 # SQLite3 is included in Python standard library
+
+# Testing dependencies (for local development)
+pytest>=6.0.0
+pytest-cov>=2.0.0
+
+# Optional: For enhanced logging
+# logging>=0.4.9.6
+
+# Development tools
+# black>=21.0.0  # Code formatting
+# flake8>=3.9.0  # Linting
