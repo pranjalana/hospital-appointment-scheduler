@@ -5,6 +5,24 @@ def load_sample_data():
     """Load sample data for testing"""
     db_manager = DatabaseManager()
     
+    # Clear existing data first
+    conn = db_manager.db_config.get_connection()
+    cursor = conn.cursor()
+    
+    # Clear all tables (in correct order to respect foreign keys)
+    cursor.execute('DELETE FROM consultation_history')
+    cursor.execute('DELETE FROM appointments')
+    cursor.execute('DELETE FROM doctor_leave')
+    cursor.execute('DELETE FROM doctor_breaks')
+    cursor.execute('DELETE FROM doctor_schedules')
+    cursor.execute('DELETE FROM patients')
+    cursor.execute('DELETE FROM doctors')
+    
+    conn.commit()
+    conn.close()
+    
+    print("📦 LOADING SAMPLE DATA...")
+    
     # Add sample patients
     patients = [
         ("MRN001", "John Smith", "john.smith@email.com", "555-0101", date(1985, 5, 15)),
@@ -20,6 +38,11 @@ def load_sample_data():
         if patient_id:
             patient_ids.append(patient_id)
             print(f"Added patient: {patient[1]} (ID: {patient_id})")
+        else:
+            # If patient exists, get their ID
+            existing_patient = db_manager.get_patient(mrn=patient[0])
+            if existing_patient:
+                patient_ids.append(existing_patient[0])
     
     # Add sample doctors
     doctors = [
@@ -32,8 +55,9 @@ def load_sample_data():
     doctor_ids = []
     for doctor in doctors:
         doctor_id = db_manager.add_doctor(*doctor)
-        doctor_ids.append(doctor_id)
-        print(f"Added doctor: {doctor[0]} (ID: {doctor_id})")
+        if doctor_id:
+            doctor_ids.append(doctor_id)
+            print(f"Added doctor: {doctor[0]} (ID: {doctor_id})")
     
     # Add sample appointments (tomorrow and day after)
     tomorrow = date.today() + timedelta(days=1)
@@ -47,15 +71,27 @@ def load_sample_data():
         (patient_ids[4], doctor_ids[3], day_after, time(15, 0)), # Robert Wilson with Orthopedist
     ]
     
-    for appointment in sample_appointments:
-        appointment_id, message = db_manager.add_appointment(*appointment)
-        if appointment_id:
-            print(f"Added appointment: {message} (ID: {appointment_id})")
+    successful_appointments = 0
+    for i, appointment in enumerate(sample_appointments):
+        # Check if we have enough patient and doctor IDs
+        if i < len(patient_ids) and i < len(doctor_ids):
+            appointment_id, message = db_manager.add_appointment(*appointment)
+            if appointment_id:
+                print(f"Added appointment: {message} (ID: {appointment_id})")
+                successful_appointments += 1
+            else:
+                print(f"Failed to add appointment: {message}")
         else:
-            print(f"Failed to add appointment: {message}")
+            print(f"Skipping appointment - not enough patients or doctors")
     
-    print("\nSample data loaded successfully!")
+    print(f"\n✅ Sample data loading completed!")
     print(f"Loaded {len(patient_ids)} patients and {len(doctor_ids)} doctors")
+    print(f"Created {successful_appointments} appointments")
+    print(f"\n📋 Sample Data IDs:")
+    print(f"Patients: 1-{len(patient_ids)}")
+    print(f"Doctors: 1-{len(doctor_ids)}")
+    print(f"\n💡 Try these test IDs:")
+    print(f"Patient ID: 1, Doctor ID: 1")
 
 if __name__ == "__main__":
     load_sample_data()

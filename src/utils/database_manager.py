@@ -1,5 +1,6 @@
 import sqlite3
-from datetime import datetime, time, date
+import os
+from datetime import datetime, time, date, timedelta
 from config.database_config import DatabaseConfig
 
 class DatabaseManager:
@@ -84,6 +85,18 @@ class DatabaseManager:
         conn = self.db_config.get_connection()
         cursor = conn.cursor()
         
+        # Convert time_slot to string if it's a time object
+        if hasattr(time_slot, 'isoformat'):
+            time_slot_str = time_slot.isoformat(timespec='minutes')
+        else:
+            time_slot_str = str(time_slot)
+        
+        # Convert appointment_date to string if it's a date object
+        if hasattr(appointment_date, 'isoformat'):
+            appointment_date_str = appointment_date.isoformat()
+        else:
+            appointment_date_str = str(appointment_date)
+        
         # Check for conflicts
         if self._has_appointment_conflict(doctor_id, appointment_date, time_slot, duration_minutes):
             conn.close()
@@ -93,7 +106,7 @@ class DatabaseManager:
             cursor.execute('''
                 INSERT INTO appointments (patient_id, doctor_id, appointment_date, time_slot, duration_minutes)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (patient_id, doctor_id, appointment_date, time_slot, duration_minutes))
+            ''', (patient_id, doctor_id, appointment_date_str, time_slot_str, duration_minutes))
             
             conn.commit()
             appointment_id = cursor.lastrowid
@@ -109,26 +122,42 @@ class DatabaseManager:
         conn = self.db_config.get_connection()
         cursor = conn.cursor()
         
-        # Convert time_slot to datetime for calculation
-        slot_datetime = datetime.combine(appointment_date, time_slot)
-        end_time = (slot_datetime + timedelta(minutes=duration_minutes)).time()
+        # Convert to strings for comparison
+        if hasattr(appointment_date, 'isoformat'):
+            appointment_date_str = appointment_date.isoformat()
+        else:
+            appointment_date_str = str(appointment_date)
         
         cursor.execute('''
             SELECT time_slot, duration_minutes 
             FROM appointments 
             WHERE doctor_id = ? AND appointment_date = ? AND status != 'cancelled'
-        ''', (doctor_id, appointment_date))
+        ''', (doctor_id, appointment_date_str))
         
         existing_appointments = cursor.fetchall()
         conn.close()
         
         for existing_slot, existing_duration in existing_appointments:
-            existing_start = datetime.combine(appointment_date, existing_slot).time()
-            existing_end = (datetime.combine(appointment_date, existing_slot) + 
-                          timedelta(minutes=existing_duration)).time()
+            # Convert string time back to time object for comparison
+            if isinstance(existing_slot, str):
+                existing_time = time.fromisoformat(existing_slot)
+            else:
+                existing_time = existing_slot
+                
+            existing_start = datetime.combine(appointment_date, existing_time)
+            existing_end = existing_start + timedelta(minutes=existing_duration)
+            
+            # Convert new time_slot if it's a string
+            if isinstance(time_slot, str):
+                new_time = time.fromisoformat(time_slot)
+            else:
+                new_time = time_slot
+                
+            new_start = datetime.combine(appointment_date, new_time)
+            new_end = new_start + timedelta(minutes=duration_minutes)
             
             # Check for overlap
-            if not (end_time <= existing_start or time_slot >= existing_end):
+            if not (new_end <= existing_start or new_start >= existing_end):
                 return True
         
         return False
@@ -138,16 +167,20 @@ class DatabaseManager:
         conn = self.db_config.get_connection()
         cursor = conn.cursor()
         
+        # Convert date to string for query
+        if hasattr(appointment_date, 'isoformat'):
+            appointment_date_str = appointment_date.isoformat()
+        else:
+            appointment_date_str = str(appointment_date)
+        
         cursor.execute('''
             SELECT a.*, p.name as patient_name 
             FROM appointments a 
             JOIN patients p ON a.patient_id = p.patient_id 
             WHERE a.doctor_id = ? AND a.appointment_date = ? 
             ORDER BY a.time_slot
-        ''', (doctor_id, appointment_date))
+        ''', (doctor_id, appointment_date_str))
         
         appointments = cursor.fetchall()
         conn.close()
         return appointments
-
-from datetime import timedelta
